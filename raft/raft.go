@@ -687,6 +687,9 @@ func (r *raft) becomeFollower(term uint64, lead uint64) {
 	r.step = stepFollower
 	r.reset(term)
 	r.tick = r.tickElection
+	if lead != None && lead != r.lead {
+		PrintTiming(LEADER_ELECTED)
+	}
 	r.lead = lead
 	r.state = StateFollower
 	r.logger.Infof("%x became follower at term %d", r.id, r.Term)
@@ -1433,14 +1436,23 @@ func stepFollower(r *raft, m pb.Message) error {
 		r.send(m)
 	case pb.MsgApp:
 		r.electionElapsed = 0
+		if r.lead == None {
+			PrintTiming(LEADER_ELECTED)
+		}
 		r.lead = m.From
 		r.handleAppendEntries(m)
 	case pb.MsgHeartbeat:
 		r.electionElapsed = 0
+		if r.lead == None {
+			PrintTiming(LEADER_ELECTED)
+		}
 		r.lead = m.From
 		r.handleHeartbeat(m)
 	case pb.MsgSnap:
 		r.electionElapsed = 0
+		if r.lead == None {
+			PrintTiming(LEADER_ELECTED)
+		}
 		r.lead = m.From
 		r.handleSnapshot(m)
 	case pb.MsgTransferLeader:
@@ -1448,6 +1460,7 @@ func stepFollower(r *raft, m pb.Message) error {
 			r.logger.Infof("%x no leader at term %d; dropping leader transfer msg", r.id, r.Term)
 			return nil
 		}
+		PrintTiming(LEADER_ELECTED)
 		m.To = r.lead
 		r.send(m)
 	case pb.MsgTimeoutNow:

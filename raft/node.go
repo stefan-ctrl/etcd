@@ -366,6 +366,7 @@ func (n *node) run() {
 				n.unstable <- struct{}{}
 				propc = nil
 			}
+			PrintTiming(LEADER_ELECTED) //appears there is a leader
 			lead = r.lead
 		}
 
