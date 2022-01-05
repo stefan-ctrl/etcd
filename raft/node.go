@@ -17,11 +17,22 @@ package raft
 import (
 	"context"
 	"errors"
+	"log"
+	"net/http"
+	"time"
 
 	pb "go.etcd.io/etcd/raft/v3/raftpb"
 )
 
 type SnapshotStatus int
+
+type Testcase string
+
+const (
+	T1 Testcase = "t1"
+	T2 Testcase = "t2"
+	T3 Testcase = "t3"
+)
 
 const (
 	SnapshotFinish  SnapshotStatus = 1
@@ -264,7 +275,9 @@ type node struct {
 	tickc      chan struct{}
 	done       chan struct{}
 	stop       chan struct{}
+	unstable   chan struct{}
 	status     chan chan Status
+	t2Started  bool
 
 	rn *RawNode
 }
@@ -280,11 +293,13 @@ func newNode(rn *RawNode) node {
 		// make tickc a buffered chan, so raft node can buffer some ticks when the node
 		// is busy processing raft messages. Raft node will resume process buffered
 		// ticks when it becomes idle.
-		tickc:  make(chan struct{}, 128),
-		done:   make(chan struct{}),
-		stop:   make(chan struct{}),
-		status: make(chan chan Status),
-		rn:     rn,
+		tickc:     make(chan struct{}, 128),
+		done:      make(chan struct{}),
+		stop:      make(chan struct{}),
+		status:    make(chan chan Status),
+		unstable:  make(chan struct{}),
+		t2Started: false,
+		rn:        rn,
 	}
 }
 
@@ -329,13 +344,18 @@ func (n *node) run() {
 		if lead != r.lead {
 			if r.hasLeader() {
 				if lead == None {
+					PrintTiming(LEADER_ELECTED)
 					r.logger.Infof("raft.node: %x elected leader %x at term %d", r.id, r.lead, r.Term)
 				} else {
+					PrintTiming(UNSTABLE)
+					n.unstable <- struct{}{}
 					r.logger.Infof("raft.node: %x changed leader from %x to %x at term %d", r.id, lead, r.lead, r.Term)
 				}
 				propc = n.propc
 			} else {
 				r.logger.Infof("raft.node: %x lost leader %x at term %d", r.id, lead, r.Term)
+				PrintTiming(LEADER_STOPPED)
+				n.unstable <- struct{}{}
 				propc = nil
 			}
 			lead = r.lead
@@ -557,6 +577,98 @@ func (n *node) TransferLeadership(ctx context.Context, lead, transferee uint64) 
 
 func (n *node) ReadIndex(ctx context.Context, rctx []byte) error {
 	return n.step(ctx, pb.Message{Type: pb.MsgReadIndex, Entries: []pb.Entry{{Data: rctx}}})
+}
+
+func (n *node) WatchStableLeaderElection(d time.Duration, testcase Testcase) {
+	switch testcase {
+	case T1:
+		tmr := time.NewTimer(d)
+		for {
+			select {
+			case <-tmr.C: //defined stability reached
+				PrintTiming(STABLE_LEADER)
+				if n.rn.raft.lead == n.rn.raft.id {
+					_, err := http.Get("http://172.17.0.1:10080/finished")
+					if err != nil {
+						log.Print(err.Error())
+					}
+				}
+				PrintTiming(SERVICE_STOP)
+			case <-n.unstable: //unstable, therefore it resets
+				PrintTiming(UNSTABLE)
+				if !tmr.Stop() {
+					tmr.Reset(d)
+				} else {
+					tmr = time.NewTimer(d)
+				}
+
+			}
+		}
+	case T2:
+		firstLeaderAfterCrash := true //first leader triggers UNSTABLE. Event. So skip once
+		tmr := time.NewTimer(d)
+		for {
+			select {
+			case <-tmr.C: //defined stability reached
+				if n.t2Started {
+					PrintTiming(STABLE_LEADER)
+				}
+				if n.rn.raft.lead == n.rn.raft.id && n.t2Started {
+					_, err := http.Get("http://172.17.0.1:10080/deleteLeader")
+					if err != nil {
+						log.Print(err.Error())
+					}
+				}
+				if n.t2Started {
+					PrintTiming(LEADER_STOPPED)
+				} else {
+					if !tmr.Stop() {
+						tmr.Reset(d)
+					} else {
+						tmr = time.NewTimer(d)
+					}
+				}
+			case <-n.unstable: //unstable, therefore it resets
+				if n.t2Started {
+					if !firstLeaderAfterCrash {
+						PrintTiming(UNSTABLE)
+					}
+					firstLeaderAfterCrash = false
+				}
+				if !tmr.Stop() {
+					tmr.Reset(d)
+				} else {
+					tmr = time.NewTimer(d)
+				}
+
+			}
+		}
+	case T3:
+		tmr := time.NewTimer(d)
+		for {
+			select {
+			case <-tmr.C: //defined stability reached
+				PrintTiming(STABLE_LEADER)
+			case <-n.unstable: //unstable, therefore it resets
+				PrintTiming(UNSTABLE)
+				if !tmr.Stop() {
+					tmr.Reset(d)
+				} else {
+					tmr = time.NewTimer(d)
+				}
+			}
+		}
+	}
+}
+
+func (n *node) StartT2() {
+	if !n.t2Started {
+		_, err := http.Get("http://172.17.0.1:10080/startT2")
+		if err != nil {
+		}
+		PrintTiming(T2_START)
+	}
+	n.t2Started = true
 }
 
 func newReady(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState) Ready {
