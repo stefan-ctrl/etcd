@@ -67,7 +67,7 @@ func PrintTiming(event Event) {
 }
 
 func PrintDebug(msg string) {
-	writeTimingToFile(msg)
+	writeTimingToFile("DEB:" + msg)
 }
 
 func writeTimingToFile(msg string) {
