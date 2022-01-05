@@ -215,6 +215,14 @@ type Node interface {
 	ReportSnapshot(id uint64, status SnapshotStatus)
 	// Stop performs any necessary termination of the Node.
 	Stop()
+
+	//WatchStableLeaderElection passes a duration. After this duration is
+	//passed, the leader ist signaled as stable and T1 can be ended.
+	//IF testcase == T2, the leader will be killed. Make sure StartT2() ist
+	//stared before
+	WatchStableLeaderElection(d time.Duration, testcase Testcase)
+	//StartT2 start Use-Case T2
+	StartT2()
 }
 
 type Peer struct {
