@@ -352,6 +352,7 @@ func (n *node) run() {
 		if lead != r.lead {
 			if r.hasLeader() {
 				if lead == None {
+					PrintDebug("Leader Elected via lead != r.lead && r.hasLeader() and first leader")
 					PrintTiming(LEADER_ELECTED)
 					r.logger.Infof("raft.node: %x elected leader %x at term %d", r.id, r.lead, r.Term)
 				} else {
@@ -366,6 +367,7 @@ func (n *node) run() {
 				n.unstable <- struct{}{}
 				propc = nil
 			}
+			PrintDebug("Leader Elected via lead != r.lead && r.hasLeader() but simmply new leader")
 			PrintTiming(LEADER_ELECTED) //appears there is a leader
 			lead = r.lead
 		}

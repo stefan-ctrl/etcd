@@ -66,6 +66,10 @@ func PrintTiming(event Event) {
 	writeTimingToFile(str)
 }
 
+func PrintDebug(msg string) {
+	writeTimingToFile(msg)
+}
+
 func writeTimingToFile(msg string) {
 	msg = msg + "\n"
 	// If the file doesn't exist, create it, or append to the file

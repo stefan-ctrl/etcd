@@ -688,6 +688,7 @@ func (r *raft) becomeFollower(term uint64, lead uint64) {
 	r.reset(term)
 	r.tick = r.tickElection
 	if lead != None && lead != r.lead {
+		PrintDebug(fmt.Sprintf("%x became follower at term %d to lead %d", r.id, r.Term, r.lead))
 		PrintTiming(LEADER_ELECTED)
 	}
 	r.lead = lead
@@ -725,6 +726,7 @@ func (r *raft) becomePreCandidate() {
 }
 
 func (r *raft) becomeLeader() {
+	PrintDebug("become Leader")
 	PrintTiming(LEADER_ELECTED)
 	// TODO(xiangli) remove the panic when the raft implementation is stable
 	if r.state == StateFollower {
@@ -766,6 +768,7 @@ func (r *raft) hup(t CampaignType) {
 		r.logger.Debugf("%x ignoring MsgHup because already leader", r.id)
 		return
 	}
+	PrintDebug("hub called. Election Started.")
 	PrintTiming(ELECTION_START)
 	if !r.promotable() {
 		r.logger.Warningf("%x is unpromotable and can not campaign", r.id)
@@ -1437,6 +1440,7 @@ func stepFollower(r *raft, m pb.Message) error {
 	case pb.MsgApp:
 		r.electionElapsed = 0
 		if r.lead == None {
+			PrintDebug("Received MSG of Leader via pb.MsgApp")
 			PrintTiming(LEADER_ELECTED)
 		}
 		r.lead = m.From
@@ -1444,6 +1448,7 @@ func stepFollower(r *raft, m pb.Message) error {
 	case pb.MsgHeartbeat:
 		r.electionElapsed = 0
 		if r.lead == None {
+			PrintDebug("Received MSG of Leader via pb.MsgHeartbeat")
 			PrintTiming(LEADER_ELECTED)
 		}
 		r.lead = m.From
@@ -1451,6 +1456,7 @@ func stepFollower(r *raft, m pb.Message) error {
 	case pb.MsgSnap:
 		r.electionElapsed = 0
 		if r.lead == None {
+			PrintDebug("Received MSG of Leader via pb.MsgSnap")
 			PrintTiming(LEADER_ELECTED)
 		}
 		r.lead = m.From
@@ -1460,6 +1466,7 @@ func stepFollower(r *raft, m pb.Message) error {
 			r.logger.Infof("%x no leader at term %d; dropping leader transfer msg", r.id, r.Term)
 			return nil
 		}
+		PrintDebug("Received MSG of Leader Transfer via pb.MsgTransferLeader")
 		PrintTiming(LEADER_ELECTED)
 		m.To = r.lead
 		r.send(m)
