@@ -633,6 +633,7 @@ func (n *node) WatchStableLeaderElection(d time.Duration, testcase Testcase) {
 				if n.t2Started {
 					PrintTiming(LEADER_STOPPED)
 				} else {
+					n.StartT2()
 					if !tmr.Stop() {
 						tmr.Reset(d)
 					} else {
@@ -676,6 +677,7 @@ func (n *node) StartT2() {
 	if !n.t2Started {
 		_, err := http.Get("http://172.17.0.1:10080/startT2")
 		if err != nil {
+			PrintDebug(err.Error())
 		}
 		PrintTiming(T2_START)
 	}
